@@ -6,7 +6,6 @@ class Client:
     def __init__(self):
         dependancy = DependancyService()
         self.id = uuid.uuid4()
-        self.model = dependancy.create_model()
         self.train_loader, self.test_loader = dependancy.create_loader()
         self.criterion = dependancy.create_loss_function()
         self.optimiser = dependancy.create_optimiser(self.model)
@@ -22,8 +21,9 @@ class Client:
                 outputs = self.model(images)
                 
                 loss = self.criterion(
-                    labels,
-                    outputs
+                    outputs,
+                    labels
+                    
                     
                 )
                 
@@ -42,7 +42,7 @@ class Client:
         total = 0
         
         with torch.no_grad():
-            for images, labels in self.train_loader:
+            for images, labels in self.test_loader:
                 
                 outputs = self.model(images)
                 
