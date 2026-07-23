@@ -8,6 +8,7 @@ class Client:
         self.id = uuid.uuid4()
         self.train_loader, self.test_loader = dependancy.create_loader()
         self.criterion = dependancy.create_loss_function()
+        self.model = dependancy.create_model()
         self.optimiser = dependancy.create_optimiser(self.model)
         
     def train_model(self, epochs=2):
