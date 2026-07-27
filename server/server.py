@@ -8,6 +8,8 @@ class Server:
         
         dependancy = DependancyService()
         self.model = dependancy.create_model()
+        self.train_loader, self.test_loader = dependancy.create_loader()
+        self.criterion = dependancy.create_loss_function()
         
         self.received_weights = []
         
@@ -33,7 +35,7 @@ class Server:
             new_weights[key] = torch.stack(
                 [
                     weights[key].float()
-                    for weights in self.client_weights
+                    for weights in self.received_weights
                     ]
                 
             ).mean(dim=0)
@@ -44,3 +46,35 @@ class Server:
 
         self.client_weights = []
     
+    def evaluate(self):
+        self.model.eval()
+        correct = 0
+        loss = 0
+        total_loss = 0
+        
+        with torch.no_grad():
+            for images, labels in self.test_loader:
+                outputs = self.model(images)
+                loss = self.criterion(
+                    outputs,
+                    labels
+                )
+                total_loss += loss.items()
+                predicted = torch.argmax(
+                    outputs,
+                    dim=1
+                )
+                
+                total += labels.size(0)
+                
+                corrected += (
+                    predicted == labels
+                ).sum().item() 
+                
+        accuracy = correct / total
+
+        average_loss = total_loss / len(self.test_loader)
+
+
+        return accuracy, average_loss
+        
