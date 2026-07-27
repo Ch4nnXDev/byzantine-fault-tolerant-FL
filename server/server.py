@@ -50,6 +50,7 @@ class Server:
         self.model.eval()
         correct = 0
         loss = 0
+        total = 0
         total_loss = 0
         
         with torch.no_grad():
@@ -59,7 +60,7 @@ class Server:
                     outputs,
                     labels
                 )
-                total_loss += loss.items()
+                total_loss += loss.item()
                 predicted = torch.argmax(
                     outputs,
                     dim=1
@@ -67,7 +68,7 @@ class Server:
                 
                 total += labels.size(0)
                 
-                corrected += (
+                correct += (
                     predicted == labels
                 ).sum().item() 
                 
