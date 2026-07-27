@@ -16,6 +16,7 @@ class Client:
         self.model.train()
         
         for epoch in range(epochs):
+            run_loss = 0
             
             for images, labels in self.train_loader:
                 
@@ -28,11 +29,18 @@ class Client:
                     
                 )
                 
+                
                 self.optimiser.zero_grad()
                 
                 loss.backward()
                 
                 self.optimiser.step()
+                
+                run_loss += loss.item()
+        average_loss = run_loss / len(self.train_loader)
+        return average_loss
+                
+                
     
     
     def evaluate(self):
@@ -64,6 +72,9 @@ class Client:
     
     def set_weights(self, weights):
         self.model.load_state_dict(weights)
+        
+    
+        
                     
                 
                 
