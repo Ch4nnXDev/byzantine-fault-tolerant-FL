@@ -1,15 +1,18 @@
 from clients.client import Client
 from server.server import Server
+from datasets.dataLoader import DataManager
+import datasets
 
 class Main:
     def __init__(self):
         self.server = Server()
         self.clients = []
-        
+        self.data_manager = DataManager(datasets.MNIST)
         
     def create_clients(self, num):
+        client_loader = self.Dat
         for i in range(num):
-            client = Client()
+            client = Client(train_loader, test_loader)
             self.clients.append(client)
         
             
