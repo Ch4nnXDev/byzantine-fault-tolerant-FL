@@ -4,6 +4,7 @@ from torch.utils.data import random_split
 
 
 class DataManager:
+
     def __init__(self, dataset):
         self.dataset = dataset
 
@@ -33,7 +34,8 @@ class DataManager:
 
         test_loader = DataLoader(
             test_dataset,
-            batch_size=batch_size
+            batch_size=batch_size,
+            shuffle=False
         )
 
         return train_loader, test_loader
@@ -49,17 +51,12 @@ class DataManager:
             transform=transform
         )
 
-        # Number of samples each client receives
         partition_size = len(train_dataset) // num_clients
 
-        # Create a list of partition sizes
         lengths = [partition_size] * num_clients
 
-        # If the dataset size isn't perfectly divisible,
-        # give the remaining samples to the last client
         lengths[-1] += len(train_dataset) - sum(lengths)
 
-        # Split the dataset
         client_datasets = random_split(
             train_dataset,
             lengths

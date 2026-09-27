@@ -8,3 +8,5 @@ train-images-idx3-ubyte.gz
 train-images-idx3-ubyte
 train-labels-idx1-ubyte
 train-labels-idx1-ubyte.gz
+.DS_Store
+experiments
