@@ -17,13 +17,15 @@ class ResearchReportGenerator:
         self.plot_files = plot_files
         self.output_dir = metrics.output_dir
 
+    # =========================================================
+    # Generate report
+    # =========================================================
+
     def generate(self):
 
         document = Document()
 
-        self.add_title(
-            document
-        )
+        self.add_title(document)
 
         self.add_experiment_information(
             document
@@ -34,6 +36,10 @@ class ResearchReportGenerator:
         )
 
         self.add_convergence_analysis(
+            document
+        )
+
+        self.add_runtime_analysis(
             document
         )
 
@@ -58,7 +64,14 @@ class ResearchReportGenerator:
 
         return path
 
-    def add_title(self, document):
+    # =========================================================
+    # Title
+    # =========================================================
+
+    def add_title(
+        self,
+        document
+    ):
 
         title = document.add_heading(
             "Federated Learning Experiment Report",
@@ -80,6 +93,10 @@ class ResearchReportGenerator:
         ).bold = True
 
         document.add_paragraph()
+
+    # =========================================================
+    # Experiment configuration
+    # =========================================================
 
     def add_experiment_information(
         self,
@@ -154,6 +171,27 @@ class ResearchReportGenerator:
             ),
 
             (
+                "Batch Size",
+                metadata.get(
+                    "batch_size"
+                )
+            ),
+
+            (
+                "Learning Rate",
+                metadata.get(
+                    "learning_rate"
+                )
+            ),
+
+            (
+                "Partition Type",
+                metadata.get(
+                    "partition_type"
+                )
+            ),
+
+            (
                 "Byzantine Clients",
                 metadata.get(
                     "byzantine_clients"
@@ -161,9 +199,37 @@ class ResearchReportGenerator:
             ),
 
             (
+                "Attack",
+                metadata.get(
+                    "attack"
+                )
+            ),
+
+            (
                 "Aggregation Method",
                 metadata.get(
                     "aggregation_method"
+                )
+            ),
+
+            (
+                "Topology",
+                metadata.get(
+                    "topology"
+                )
+            ),
+
+            (
+                "Defense Enabled",
+                metadata.get(
+                    "defense_enabled"
+                )
+            ),
+
+            (
+                "Defense Method",
+                metadata.get(
+                    "defense_method"
                 )
             ),
 
@@ -179,9 +245,17 @@ class ResearchReportGenerator:
 
             row = table.add_row().cells
 
-            row[0].text = str(name)
+            row[0].text = str(
+                name
+            )
 
-            row[1].text = str(value)
+            row[1].text = str(
+                value
+            )
+
+    # =========================================================
+    # Experiment summary
+    # =========================================================
 
     def add_summary(
         self,
@@ -201,7 +275,8 @@ class ResearchReportGenerator:
         if not convergence:
 
             document.add_paragraph(
-                "No experiment metrics were recorded."
+                "No experiment metrics "
+                "were recorded."
             )
 
             return
@@ -227,11 +302,31 @@ class ResearchReportGenerator:
         )
 
         paragraph.add_run(
+            "\nBest Accuracy: "
+        ).bold = True
+
+        paragraph.add_run(
+            f"{convergence['best_accuracy']:.2%}"
+        )
+
+        paragraph.add_run(
+            "\nBest Accuracy Round: "
+        ).bold = True
+
+        paragraph.add_run(
+            str(
+                convergence[
+                    "best_accuracy_round"
+                ]
+            )
+        )
+
+        paragraph.add_run(
             "\nAccuracy Gain: "
         ).bold = True
 
         paragraph.add_run(
-            f"{convergence['accuracy_gain']:.2%}"
+            f"{convergence['accuracy_gain']:+.2%}"
         )
 
         paragraph.add_run(
@@ -266,6 +361,10 @@ class ResearchReportGenerator:
             f"{convergence['loss_reduction_percent']:.2f}%"
         )
 
+    # =========================================================
+    # Convergence analysis
+    # =========================================================
+
     def add_convergence_analysis(
         self,
         document
@@ -294,7 +393,7 @@ class ResearchReportGenerator:
         ).bold = True
 
         paragraph.add_run(
-            f"{convergence['max_accuracy_improvement']:.2%}"
+            f"{convergence['max_accuracy_improvement']:+.2%}"
         )
 
         paragraph.add_run(
@@ -306,15 +405,125 @@ class ResearchReportGenerator:
             f"{convergence['average_accuracy_change']:.4f}"
         )
 
+        paragraph.add_run(
+            "\nAccuracy volatility: "
+        ).bold = True
+
+        paragraph.add_run(
+            f"{convergence['accuracy_volatility']:.4f}"
+        )
+
+        paragraph.add_run(
+            "\nAverage round-to-round "
+            "loss change: "
+        ).bold = True
+
+        paragraph.add_run(
+            f"{convergence['average_loss_change']:.4f}"
+        )
+
+        paragraph.add_run(
+            "\nLoss volatility: "
+        ).bold = True
+
+        paragraph.add_run(
+            f"{convergence['loss_volatility']:.4f}"
+        )
+
         document.add_paragraph()
 
         document.add_paragraph(
-            "These measurements provide an "
-            "indication of the convergence "
-            "behaviour and round-to-round "
-            "stability of the federated "
-            "learning system."
+            "These measurements describe the "
+            "convergence behaviour and stability "
+            "of the federated learning process "
+            "across communication rounds."
         )
+
+    # =========================================================
+    # Runtime analysis
+    # =========================================================
+
+    def add_runtime_analysis(
+        self,
+        document
+    ):
+
+        document.add_heading(
+            "4. Runtime Analysis",
+            level=1
+        )
+
+        convergence = (
+            self.metrics
+            .get_convergence_metrics()
+        )
+
+        if not convergence:
+
+            document.add_paragraph(
+                "No runtime metrics "
+                "were recorded."
+            )
+
+            return
+
+        paragraph = (
+            document.add_paragraph()
+        )
+
+        paragraph.add_run(
+            "Average Round Duration: "
+        ).bold = True
+
+        paragraph.add_run(
+            f"{convergence['average_round_duration']:.2f} seconds"
+        )
+
+        paragraph.add_run(
+            "\nMinimum Round Duration: "
+        ).bold = True
+
+        paragraph.add_run(
+            f"{convergence['min_round_duration']:.2f} seconds"
+        )
+
+        paragraph.add_run(
+            "\nMaximum Round Duration: "
+        ).bold = True
+
+        paragraph.add_run(
+            f"{convergence['max_round_duration']:.2f} seconds"
+        )
+
+        total_duration = (
+            convergence[
+                "total_experiment_duration"
+            ]
+        )
+
+        if total_duration is not None:
+
+            paragraph.add_run(
+                "\nTotal Experiment Duration: "
+            ).bold = True
+
+            paragraph.add_run(
+                f"{total_duration:.2f} seconds"
+            )
+
+        document.add_paragraph()
+
+        document.add_paragraph(
+            "Runtime measurements provide a "
+            "baseline for evaluating computational "
+            "overhead when additional Byzantine "
+            "resilience, topology management, or "
+            "defense mechanisms are introduced."
+        )
+
+    # =========================================================
+    # Figures
+    # =========================================================
 
     def add_figures(
         self,
@@ -322,7 +531,7 @@ class ResearchReportGenerator:
     ):
 
         document.add_heading(
-            "4. Experimental Results",
+            "5. Experimental Results",
             level=1
         )
 
@@ -339,6 +548,13 @@ class ResearchReportGenerator:
                 "Global Loss",
                 self.plot_files.get(
                     "global_loss"
+                )
+            ),
+
+            (
+                "Round-to-Round Accuracy Change",
+                self.plot_files.get(
+                    "accuracy_change"
                 )
             ),
 
@@ -360,6 +576,13 @@ class ResearchReportGenerator:
                 "Client Loss Variability",
                 self.plot_files.get(
                     "client_loss_variability"
+                )
+            ),
+
+            (
+                "Federated Round Duration",
+                self.plot_files.get(
+                    "round_duration"
                 )
             )
         ]
@@ -390,13 +613,17 @@ class ResearchReportGenerator:
                 WD_ALIGN_PARAGRAPH.CENTER
             )
 
+    # =========================================================
+    # Client-level analysis
+    # =========================================================
+
     def add_client_analysis(
         self,
         document
     ):
 
         document.add_heading(
-            "5. Client-Level Analysis",
+            "6. Client-Level Analysis",
             level=1
         )
 
@@ -414,9 +641,14 @@ class ResearchReportGenerator:
 
             return
 
+        client_convergence = (
+            self.metrics
+            .get_client_convergence_metrics()
+        )
+
         table = document.add_table(
             rows=1,
-            cols=4
+            cols=6
         )
 
         table.style = (
@@ -431,6 +663,8 @@ class ResearchReportGenerator:
         header[1].text = "Rounds"
         header[2].text = "Initial Loss"
         header[3].text = "Final Loss"
+        header[4].text = "Loss Change"
+        header[5].text = "Loss Reduction %"
 
         for client_id, losses in (
             client_metrics.items()
@@ -438,6 +672,11 @@ class ResearchReportGenerator:
 
             if not losses:
                 continue
+
+            data = client_convergence.get(
+                client_id,
+                {}
+            )
 
             row = (
                 table.add_row().cells
@@ -459,13 +698,25 @@ class ResearchReportGenerator:
                 f"{losses[-1]:.4f}"
             )
 
+            row[4].text = (
+                f"{data.get('loss_change', 0.0):+.4f}"
+            )
+
+            row[5].text = (
+                f"{data.get('loss_reduction_percent', 0.0):.2f}%"
+            )
+
+    # =========================================================
+    # Conclusion
+    # =========================================================
+
     def add_conclusion(
         self,
         document
     ):
 
         document.add_heading(
-            "6. Conclusion",
+            "7. Conclusion",
             level=1
         )
 
@@ -485,75 +736,97 @@ class ResearchReportGenerator:
             return
 
         initial_accuracy = (
-            convergence["initial_accuracy"]
+            convergence[
+                "initial_accuracy"
+            ]
         )
 
         final_accuracy = (
-            convergence["final_accuracy"]
+            convergence[
+                "final_accuracy"
+            ]
         )
 
         accuracy_gain = (
-            convergence["accuracy_gain"]
+            convergence[
+                "accuracy_gain"
+            ]
         )
 
         loss_reduction = (
-            convergence["loss_reduction"]
+            convergence[
+                "loss_reduction"
+            ]
         )
+
+        # -----------------------------------------------------
+        # Accuracy statement
+        # -----------------------------------------------------
 
         if accuracy_gain > 0:
 
             accuracy_statement = (
 
-                f"Global accuracy increased "
-                f"from {initial_accuracy:.2%} "
-                f"to {final_accuracy:.2%}, "
-                f"representing an improvement "
-                f"of {accuracy_gain:.2%}."
+                f"Global accuracy changed from "
+                f"{initial_accuracy:.2%} to "
+                f"{final_accuracy:.2%}, with a "
+                f"net change of "
+                f"{accuracy_gain:+.2%}."
             )
 
         elif accuracy_gain < 0:
 
             accuracy_statement = (
 
-                f"Global accuracy decreased "
-                f"from {initial_accuracy:.2%} "
-                f"to {final_accuracy:.2%}, "
-                f"representing a change of "
-                f"{accuracy_gain:.2%}."
+                f"Global accuracy changed from "
+                f"{initial_accuracy:.2%} to "
+                f"{final_accuracy:.2%}, with a "
+                f"net change of "
+                f"{accuracy_gain:+.2%}."
             )
 
         else:
 
             accuracy_statement = (
 
-                "Global accuracy remained "
-                "unchanged between the first "
-                "and final rounds."
+                f"Global accuracy remained at "
+                f"{final_accuracy:.2%} between "
+                f"the first and final recorded "
+                f"rounds."
             )
+
+        # -----------------------------------------------------
+        # Loss statement
+        # -----------------------------------------------------
 
         if loss_reduction > 0:
 
             loss_statement = (
 
-                f"Global loss decreased by "
-                f"{loss_reduction:.4f}, "
-                "indicating a reduction in "
-                "the measured loss over the "
-                "experiment."
+                f"Global loss changed from "
+                f"{convergence['initial_loss']:.4f} "
+                f"to {convergence['final_loss']:.4f}, "
+                f"representing a reduction of "
+                f"{loss_reduction:.4f}."
             )
 
         elif loss_reduction < 0:
 
             loss_statement = (
 
-                f"Global loss increased by "
+                f"Global loss changed from "
+                f"{convergence['initial_loss']:.4f} "
+                f"to {convergence['final_loss']:.4f}, "
+                f"representing an increase of "
                 f"{abs(loss_reduction):.4f}."
             )
 
         else:
 
             loss_statement = (
-                "Global loss remained unchanged."
+                "Global loss remained unchanged "
+                "between the first and final "
+                "recorded rounds."
             )
 
         document.add_paragraph(
@@ -565,8 +838,7 @@ class ResearchReportGenerator:
         )
 
         document.add_paragraph(
-            "The results and figures in this "
-            "report were generated directly "
-            "from the recorded experimental "
-            "metrics."
+            "The report is generated directly "
+            "from the recorded experiment "
+            "configuration and metrics."
         )

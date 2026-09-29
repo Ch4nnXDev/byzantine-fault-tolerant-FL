@@ -1,16 +1,36 @@
 from torchvision import transforms
+
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
+
+import torch
 
 
 class DataManager:
 
-    def __init__(self, dataset):
-        self.dataset = dataset
+    def __init__(
+        self,
+        dataset,
+        seed=42
+    ):
 
-    def load_dataset(self, batch_size=32):
+        self.dataset = dataset
+        self.seed = seed
+
+    # =========================================================
+    # Dataset loading
+    # =========================================================
+
+    def load_dataset(
+        self,
+        batch_size=32
+    ):
 
         transform = transforms.ToTensor()
+
+        # -----------------------------------------------------
+        # Training dataset
+        # -----------------------------------------------------
 
         train_dataset = self.dataset(
             root="data",
@@ -19,12 +39,20 @@ class DataManager:
             transform=transform
         )
 
+        # -----------------------------------------------------
+        # Test dataset
+        # -----------------------------------------------------
+
         test_dataset = self.dataset(
             root="data",
             train=False,
             download=True,
             transform=transform
         )
+
+        # -----------------------------------------------------
+        # DataLoaders
+        # -----------------------------------------------------
 
         train_loader = DataLoader(
             train_dataset,
@@ -40,9 +68,33 @@ class DataManager:
 
         return train_loader, test_loader
 
-    def create_client_loaders(self, num_clients, batch_size=32):
+    # =========================================================
+    # Client dataset partitioning
+    # =========================================================
+
+    def create_client_loaders(
+        self,
+        num_clients,
+        batch_size=32,
+        partition_type="iid"
+    ):
+
+        # -----------------------------------------------------
+        # Currently supported partition
+        # -----------------------------------------------------
+
+        if partition_type != "iid":
+
+            raise ValueError(
+                f"Unsupported partition type: "
+                f"{partition_type}"
+            )
 
         transform = transforms.ToTensor()
+
+        # -----------------------------------------------------
+        # Load training dataset
+        # -----------------------------------------------------
 
         train_dataset = self.dataset(
             root="data",
@@ -51,27 +103,62 @@ class DataManager:
             transform=transform
         )
 
-        partition_size = len(train_dataset) // num_clients
+        # -----------------------------------------------------
+        # Calculate partition sizes
+        # -----------------------------------------------------
 
-        lengths = [partition_size] * num_clients
+        partition_size = (
+            len(train_dataset) //
+            num_clients
+        )
 
-        lengths[-1] += len(train_dataset) - sum(lengths)
+        lengths = (
+            [partition_size] *
+            num_clients
+        )
+
+        # Give remaining samples to last client
+        lengths[-1] += (
+            len(train_dataset) -
+            sum(lengths)
+        )
+
+        # -----------------------------------------------------
+        # Create deterministic generator
+        # -----------------------------------------------------
+
+        generator = torch.Generator()
+
+        generator.manual_seed(
+            self.seed
+        )
+
+        # -----------------------------------------------------
+        # Partition dataset
+        # -----------------------------------------------------
 
         client_datasets = random_split(
             train_dataset,
-            lengths
+            lengths,
+            generator=generator
         )
+
+        # -----------------------------------------------------
+        # Create client DataLoaders
+        # -----------------------------------------------------
 
         client_loaders = []
 
-        for dataset in client_datasets:
+        for client_dataset in client_datasets:
 
             loader = DataLoader(
-                dataset,
+                client_dataset,
                 batch_size=batch_size,
                 shuffle=True
             )
 
-            client_loaders.append(loader)
+            client_loaders.append(
+                loader
+            )
 
         return client_loaders
