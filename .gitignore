@@ -10,3 +10,4 @@ train-labels-idx1-ubyte
 train-labels-idx1-ubyte.gz
 .DS_Store
 experiments
+frontend/
