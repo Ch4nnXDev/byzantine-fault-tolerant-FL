@@ -1,5 +1,5 @@
 experiment:
-  name: "EXP03_BYZANTINE_SIGN_FLIP_MULTIPLE"
+  name: "EXP03.1_BYZANTINE_SIGN_FLIP_MULTIPLE"
   seed: 42
 
 federated_learning:

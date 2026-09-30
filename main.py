@@ -418,7 +418,7 @@ class Main:
         )
         
         print(
-            "Attack Strength",
+            "Attack Strength:",
             (
                 self.attack_strength
                 if self.byzantine_enabled

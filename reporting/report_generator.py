@@ -207,7 +207,7 @@ class ResearchReportGenerator:
             (
                 "Attack Strength",
                 metadata.get(
-                    "attack strength"
+                    "attack_strength"
                 )
             ),
             (
