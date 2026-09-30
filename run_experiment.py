@@ -19,6 +19,7 @@ def main():
     print("Enabled:", config["byzantine"]["enabled"])
     print("Nodes:", config["byzantine"]["num_nodes"])
     print("Attack:", config["byzantine"]["attack"])
+    print("Attack strength:", config["byzantine"]["attack_strength"])
 
     print("\nTopology")
     print("Type:", config["topology"]["type"])

@@ -204,7 +204,12 @@ class ResearchReportGenerator:
                     "attack"
                 )
             ),
-
+            (
+                "Attack Strength",
+                metadata.get(
+                    "attack strength"
+                )
+            ),
             (
                 "Aggregation Method",
                 metadata.get(

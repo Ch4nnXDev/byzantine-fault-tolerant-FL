@@ -130,6 +130,10 @@ class Main:
         self.attack_type = (
             byzantine_config["attack"]
         )
+        
+        self.attack_strength = (
+            byzantine_config["attack_strength"]
+        )
 
         self.topology_type = (
             topology_config["type"]
@@ -215,7 +219,8 @@ class Main:
                 client = Attacker(
                     train_loader=train_loader,
                     learning_rate=self.learning_rate,
-                    attack_type=self.attack_type
+                    attack_type=self.attack_type,
+                    attack_strength=self.attack_strength
                 )
 
             else:
@@ -330,6 +335,12 @@ class Main:
                 self.attack_type
                 if self.byzantine_enabled
                 else "none"
+            ),
+            
+            attack_strength=(
+                self.attack_strength
+                if self.byzantine_enabled
+                else None
             )
         )
 
@@ -401,6 +412,15 @@ class Main:
             "Attack:",
             (
                 self.attack_type
+                if self.byzantine_enabled
+                else "none"
+            )
+        )
+        
+        print(
+            "Attack Strength",
+            (
+                self.attack_strength
                 if self.byzantine_enabled
                 else "none"
             )
@@ -763,7 +783,7 @@ def main():
     # ---------------------------------------------------------
 
     config = load_config(
-        "config/exp03_byzantine_sign_flip_multiple.yaml"
+        "config/exp03.1_byzantine_sign_flip_multiple.yaml"
     )
 
     experiment = Main(

@@ -168,7 +168,8 @@ class Metrics:
         topology=None,
         defense_enabled=False,
         defense_method="none",
-        attack="none"
+        attack="none",
+        attack_strength=None
     ):
 
         self.metadata = {
@@ -211,6 +212,9 @@ class Metrics:
 
             "attack":
                 attack,
+            
+            "attack_strength":
+                attack_strength,
 
             "aggregation_method":
                 aggregation_method,
