@@ -1,5 +1,5 @@
 experiment:
-  name: "EXP01_BENIGN_BASELINE"
+  name: "EXP03_BYZANTINE_SIGN_FLIP_MULTIPLE"
   seed: 42
 
 federated_learning:
@@ -15,9 +15,10 @@ dataset:
     type: "iid"
 
 byzantine:
-  enabled: false
-  num_nodes: 0
-  attack: "none"
+  enabled: true
+  num_nodes: 2
+  attack: "sign_flip"
+  attack_strength: 2
 
 topology:
   type: "fully_connected"
