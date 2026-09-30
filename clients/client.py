@@ -7,11 +7,7 @@ from dependancyService.dependancyService import DependancyService
 
 class Client:
 
-    def __init__(
-        self,
-        train_loader,
-        learning_rate=0.01
-    ):
+    def __init__(self, train_loader, learning_rate=0.01):
 
         dependancy = DependancyService()
 
@@ -31,9 +27,7 @@ class Client:
         # Training components
         # =====================================================
 
-        self.criterion = (
-            dependancy.create_loss_function()
-        )
+        self.criterion = (dependancy.create_loss_function())
 
         self.model = (
             dependancy.create_model()
@@ -56,6 +50,8 @@ class Client:
         self.num_samples = (
             len(train_loader.dataset)
         )
+        
+        self.global_weights = None #because the attacker client does the attack inside the (difference of Weight) (AW)
 
     # =========================================================
     # Local training
@@ -142,4 +138,6 @@ class Client:
         self.model.load_state_dict(
             weights
         )
+        
+        self.global_weights = deepcopy(weights)
 

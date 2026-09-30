@@ -1,9 +1,8 @@
-
 from clients.client import Client
+from clients.attacker import Attacker
 from server.server import Server
 from datasets.dataLoader import DataManager
 from metrics.metrics import Metrics
-
 from visualization.plotter import ExperimentPlotter
 from reporting.report_generator import ResearchReportGenerator
 
@@ -19,138 +18,425 @@ class Main:
 
         self.config = config
 
-        seed = config["experiment"]["seed"]
+        # =====================================================
+        # Experiment configuration
+        # =====================================================
+
+        experiment_config = (
+            config["experiment"]
+        )
+
+        fl_config = (
+            config["federated_learning"]
+        )
+
+        dataset_config = (
+            config["dataset"]
+        )
+
+        byzantine_config = (
+            config["byzantine"]
+        )
+
+        topology_config = (
+            config["topology"]
+        )
+
+        defense_config = (
+            config["defense"]
+        )
+
+        seed = experiment_config["seed"]
+
+        # =====================================================
+        # Reproducibility
+        # =====================================================
+
+        set_seed(seed)
+
+        # =====================================================
+        # Server
+        # =====================================================
 
         self.server = Server()
 
+        # =====================================================
+        # Clients
+        # =====================================================
+
         self.clients = []
+
+        # =====================================================
+        # Dataset
+        # =====================================================
 
         self.data_manager = DataManager(
             datasets.MNIST,
             seed=seed
         )
 
+        # =====================================================
+        # Metrics
+        # =====================================================
+
         self.metrics = Metrics(
-            experiment_name=config["experiment"]["name"]
+            experiment_name=(
+                experiment_config["name"]
+            )
+        )
+
+        # =====================================================
+        # Store configuration values
+        #
+        # These make the experiment metadata explicit.
+        # =====================================================
+
+        self.num_clients = (
+            fl_config["num_clients"]
+        )
+
+        self.rounds = (
+            fl_config["rounds"]
+        )
+
+        self.local_epochs = (
+            fl_config["local_epochs"]
+        )
+
+        self.learning_rate = (
+            fl_config["learning_rate"]
+        )
+
+        self.dataset_name = (
+            dataset_config["name"]
+        )
+
+        self.batch_size = (
+            dataset_config["batch_size"]
+        )
+
+        self.partition_type = (
+            dataset_config["partition"]["type"]
+        )
+
+        self.byzantine_enabled = (
+            byzantine_config["enabled"]
+        )
+
+        self.num_attackers = (
+            byzantine_config["num_nodes"]
+        )
+
+        self.attack_type = (
+            byzantine_config["attack"]
+        )
+
+        self.topology_type = (
+            topology_config["type"]
+        )
+
+        self.defense_enabled = (
+            defense_config["enabled"]
+        )
+
+        self.defense_method = (
+            defense_config["method"]
         )
 
     # =========================================================
-    # Create clients
+    # CLIENT CREATION
     # =========================================================
 
     def create_clients(self, num_clients):
 
-        dataset_config = self.config["dataset"]
-
-        batch_size = dataset_config["batch_size"]
-
-        partition_type = (
-            dataset_config["partition"]["type"]
-        )
+        # -----------------------------------------------------
+        # Create client dataset partitions
+        # -----------------------------------------------------
 
         client_loaders = (
             self.data_manager.create_client_loaders(
                 num_clients=num_clients,
-                batch_size=batch_size,
-                partition_type=partition_type
+                batch_size=self.batch_size,
+                partition_type=self.partition_type
             )
         )
 
-        learning_rate = (
-            self.config["federated_learning"]
-            ["learning_rate"]
+        # -----------------------------------------------------
+        # Byzantine configuration
+        # -----------------------------------------------------
+
+        num_attackers = (
+            self.num_attackers
         )
 
-        for train_loader in client_loaders:
+        if not self.byzantine_enabled:
 
-            client = Client(
-                train_loader,
-                learning_rate=learning_rate
+            num_attackers = 0
+
+        # -----------------------------------------------------
+        # Validate configuration
+        # -----------------------------------------------------
+
+        if num_attackers < 0:
+
+            raise ValueError(
+                "Number of Byzantine nodes "
+                "cannot be negative."
             )
+
+        if num_attackers > num_clients:
+
+            raise ValueError(
+                "Number of Byzantine nodes "
+                "cannot exceed the number "
+                "of clients."
+            )
+
+        # -----------------------------------------------------
+        # Create clients
+        # -----------------------------------------------------
+
+        for client_index, train_loader in enumerate(
+            client_loaders
+        ):
+
+            # -------------------------------------------------
+            # Deterministic attacker placement
+            #
+            # For the initial experiments, the first N
+            # clients are Byzantine.
+            #
+            # This will later be replaced by topology-aware
+            # attacker placement.
+            # -------------------------------------------------
+
+            if client_index < num_attackers:
+
+                client = Attacker(
+                    train_loader=train_loader,
+                    learning_rate=self.learning_rate,
+                    attack_type=self.attack_type
+                )
+
+            else:
+
+                client = Client(
+                    train_loader=train_loader,
+                    learning_rate=self.learning_rate
+                )
 
             self.clients.append(client)
 
+        # -----------------------------------------------------
+        # Print client configuration
+        # -----------------------------------------------------
+
+        print("\nClient configuration:")
+
+        for client_index, client in enumerate(
+            self.clients
+        ):
+
+            if isinstance(client, Attacker):
+
+                print(
+                    f"Client {client_index + 1}: "
+                    f"BYZANTINE "
+                    f"(attack={client.attack_type})"
+                )
+
+            else:
+
+                print(
+                    f"Client {client_index + 1}: "
+                    f"HONEST"
+                )
+
     # =========================================================
-    # Run experiment
+    # METADATA
+    # =========================================================
+
+    def configure_metrics_metadata(self):
+
+        # -----------------------------------------------------
+        # Determine aggregation method
+        #
+        # Current platform uses FedAvg through Server.
+        # -----------------------------------------------------
+
+        aggregation_method = "FedAvg"
+
+        # -----------------------------------------------------
+        # Determine model name
+        #
+        # DependancyService creates the model, so we obtain
+        # the class name from one client after clients exist.
+        # -----------------------------------------------------
+
+        model_name = None
+
+        if self.clients:
+
+            model_name = (
+                self.clients[0]
+                .model
+                .__class__
+                .__name__
+            )
+
+        # -----------------------------------------------------
+        # Configure experiment metadata
+        # -----------------------------------------------------
+
+        self.metrics.set_metadata(
+
+            num_clients=self.num_clients,
+
+            num_rounds=self.rounds,
+
+            local_epochs=self.local_epochs,
+
+            byzantine_clients=(
+                self.num_attackers
+                if self.byzantine_enabled
+                else 0
+            ),
+
+            aggregation_method=(
+                aggregation_method
+            ),
+
+            dataset=self.dataset_name,
+
+            model=model_name,
+
+            seed=self.config[
+                "experiment"
+            ]["seed"],
+
+            batch_size=self.batch_size,
+
+            learning_rate=self.learning_rate,
+
+            partition_type=self.partition_type,
+
+            topology=self.topology_type,
+
+            defense_enabled=self.defense_enabled,
+
+            defense_method=self.defense_method,
+
+            attack=(
+                self.attack_type
+                if self.byzantine_enabled
+                else "none"
+            )
+        )
+
+    # =========================================================
+    # RUN EXPERIMENT
     # =========================================================
 
     def run(self):
 
-        fl_config = (
-            self.config["federated_learning"]
+        print("\n========================================")
+        print("Starting Experiment")
+        print("========================================")
+
+        print(
+            "Experiment:",
+            self.config["experiment"]["name"]
         )
 
-        dataset_config = (
-            self.config["dataset"]
+        print(
+            "Seed:",
+            self.config["experiment"]["seed"]
         )
 
-        byzantine_config = (
-            self.config["byzantine"]
+        print(
+            "Clients:",
+            self.num_clients
         )
 
-        topology_config = (
-            self.config["topology"]
+        print(
+            "Rounds:",
+            self.rounds
         )
 
-        defense_config = (
-            self.config["defense"]
+        print(
+            "Local epochs:",
+            self.local_epochs
         )
 
-        rounds = fl_config["rounds"]
+        print(
+            "Learning rate:",
+            self.learning_rate
+        )
 
-        local_epochs = fl_config["local_epochs"]
+        print(
+            "Dataset:",
+            self.dataset_name
+        )
 
-        # =====================================================
-        # Record experiment configuration
-        # =====================================================
+        print(
+            "Partition:",
+            self.partition_type
+        )
 
-        self.metrics.set_metadata(
+        print(
+            "Byzantine enabled:",
+            self.byzantine_enabled
+        )
 
-            num_clients=len(self.clients),
-
-            num_rounds=rounds,
-
-            local_epochs=local_epochs,
-
-            batch_size=dataset_config["batch_size"],
-
-            learning_rate=fl_config["learning_rate"],
-
-            byzantine_clients=(
-                byzantine_config["num_nodes"]
-            ),
-
-            attack=(
-                byzantine_config["attack"]
-            ),
-
-            aggregation_method="FedAvg",
-
-            dataset=dataset_config["name"],
-
-            model="CNN",
-
-            seed=self.config["experiment"]["seed"],
-
-            partition_type=(
-                dataset_config["partition"]["type"]
-            ),
-
-            topology=(
-                topology_config["type"]
-            ),
-
-            defense_enabled=(
-                defense_config["enabled"]
-            ),
-
-            defense_method=(
-                defense_config["method"]
+        print(
+            "Byzantine nodes:",
+            (
+                self.num_attackers
+                if self.byzantine_enabled
+                else 0
             )
         )
 
+        print(
+            "Attack:",
+            (
+                self.attack_type
+                if self.byzantine_enabled
+                else "none"
+            )
+        )
+
+        print(
+            "Topology:",
+            self.topology_type
+        )
+
+        print(
+            "Defense:",
+            self.defense_enabled
+        )
+
+        print(
+            "Defense method:",
+            self.defense_method
+        )
+
         # =====================================================
-        # Start total experiment timer
+        # Create clients
+        # =====================================================
+
+        self.create_clients(
+            num_clients=self.num_clients
+        )
+
+        # =====================================================
+        # Configure metrics metadata
+        # =====================================================
+
+        self.configure_metrics_metadata()
+
+        # =====================================================
+        # Start experiment timer
         # =====================================================
 
         self.metrics.start_experiment_timer()
@@ -159,37 +445,38 @@ class Main:
         # Federated learning rounds
         # =====================================================
 
-        for round_number in range(rounds):
-
-            current_round = round_number + 1
+        for round_number in range(
+            1,
+            self.rounds + 1
+        ):
 
             print(
                 f"\n========== Round "
-                f"{current_round} =========="
+                f"{round_number}/{self.rounds} =========="
             )
 
-            # ---------------------------------------------
+            # -------------------------------------------------
             # Start round timer
-            # ---------------------------------------------
+            # -------------------------------------------------
 
             self.metrics.start_round_timer()
 
-            # ---------------------------------------------
+            # -------------------------------------------------
             # Send global model to clients
-            # ---------------------------------------------
+            # -------------------------------------------------
 
             self.server.send_model(
                 self.clients
             )
 
-            # ---------------------------------------------
-            # Local client training
-            # ---------------------------------------------
+            # -------------------------------------------------
+            # Local training
+            # -------------------------------------------------
 
             for client in self.clients:
 
                 loss = client.train_model(
-                    epochs=local_epochs
+                    epochs=self.local_epochs
                 )
 
                 self.metrics.record_client(
@@ -197,14 +484,16 @@ class Main:
                     loss
                 )
 
-                print(
-                    f"Client {client.id} "
-                    f"Loss: {loss:.4f}"
-                )
-
-            # ---------------------------------------------
+            # -------------------------------------------------
             # Receive client models
-            # ---------------------------------------------
+            #
+            # For an attacker, get_weights() returns the
+            # malicious model generated from its attacked
+            # update.
+            #
+            # The server does not need to know whether the
+            # client is honest or Byzantine.
+            # -------------------------------------------------
 
             for client in self.clients:
 
@@ -212,41 +501,45 @@ class Main:
                     client
                 )
 
-            # ---------------------------------------------
+            # -------------------------------------------------
             # Aggregate client models
-            # ---------------------------------------------
+            # -------------------------------------------------
 
             self.server.aggregate()
 
-            # ---------------------------------------------
+            # -------------------------------------------------
             # Evaluate global model
-            # ---------------------------------------------
+            # -------------------------------------------------
 
             accuracy, loss = (
                 self.server.evaluate()
             )
 
+            # -------------------------------------------------
+            # Record global metrics
+            # -------------------------------------------------
+
             self.metrics.record_global(
-                current_round,
+                round_number,
                 accuracy,
                 loss
             )
 
-            # ---------------------------------------------
+            # -------------------------------------------------
             # Finish round timer
-            # ---------------------------------------------
+            # -------------------------------------------------
 
             round_duration = (
                 self.metrics.finish_round_timer()
             )
 
-            # ---------------------------------------------
+            # -------------------------------------------------
             # Print round results
-            # ---------------------------------------------
+            # -------------------------------------------------
 
             print(
                 f"Global Accuracy: "
-                f"{accuracy:.2%}"
+                f"{accuracy:.4f}"
             )
 
             print(
@@ -255,69 +548,64 @@ class Main:
             )
 
             print(
-                f"Client Mean Loss: "
-                f"{self.metrics.client_mean_loss[-1]:.4f}"
-            )
-
-            print(
-                f"Client Loss Std: "
-                f"{self.metrics.client_loss_std[-1]:.4f}"
-            )
-
-            print(
-                f"Client Loss Range: "
-                f"{self.metrics.client_loss_range[-1]:.4f}"
-            )
-
-            print(
                 f"Round Duration: "
-                f"{round_duration:.2f} seconds"
+                f"{round_duration:.2f}s"
             )
 
         # =====================================================
         # Finish experiment timer
         # =====================================================
 
-        total_duration = (
+        experiment_duration = (
             self.metrics.finish_experiment_timer()
         )
 
-        print(
-            f"\nTotal Experiment Duration: "
-            f"{total_duration:.2f} seconds"
-        )
-
         # =====================================================
-        # Print experiment analytics
+        # Save metrics
         # =====================================================
 
-        self.print_metrics()
+        print("\n========================================")
+        print("Saving Experiment Metrics")
+        print("========================================")
 
-        # =====================================================
-        # Save experiment metrics
-        # =====================================================
-
-        print(
-            "\nSaving experiment metrics..."
-        )
-
-        files = self.metrics.save_all()
-
-        print(
-            "\nMetrics saved:"
+        metric_files = (
+            self.metrics.save_all()
         )
 
         print(
-            files["experiment_directory"]
+            "Experiment directory:",
+            metric_files[
+                "experiment_directory"
+            ]
         )
-
-        # =====================================================
-        # Generate visualisations
-        # =====================================================
 
         print(
-            "\nGenerating experiment visualisations..."
+            "Metrics JSON:",
+            metric_files["json"]
         )
+
+        print(
+            "Global CSV:",
+            metric_files["global_csv"]
+        )
+
+        print(
+            "Client CSV:",
+            metric_files["client_csv"]
+        )
+
+        print(
+            "Timing CSV:",
+            metric_files["timing_csv"]
+        )
+
+        # =====================================================
+        # Generate plots
+        # =====================================================
+
+        print("\n========================================")
+        print("Generating Plots")
+        print("========================================")
 
         plotter = ExperimentPlotter(
             self.metrics
@@ -325,21 +613,13 @@ class Main:
 
         plot_files = plotter.generate_all()
 
-        for name, path in plot_files.items():
-
-            if path:
-
-                print(
-                    f"Generated {name}: {path}"
-                )
-
         # =====================================================
         # Generate research report
         # =====================================================
 
-        print(
-            "\nGenerating research report..."
-        )
+        print("\n========================================")
+        print("Generating Research Report")
+        print("========================================")
 
         report_generator = (
             ResearchReportGenerator(
@@ -348,32 +628,57 @@ class Main:
             )
         )
 
-        report_path = (
-            report_generator.generate()
-        )
-
-        print(
-            f"Research report: {report_path}"
-        )
+        report_generator.generate()
 
         # =====================================================
-        # Experiment complete
+        # Final experiment summary
         # =====================================================
 
+        convergence = (
+            self.metrics.get_convergence_metrics()
+        )
+
+        print("\n========================================")
+        print("Experiment Completed")
+        print("========================================")
+
         print(
-            "\n" + "=" * 60
+            f"Final Accuracy: "
+            f"{convergence['final_accuracy']:.4f}"
         )
 
         print(
-            "EXPERIMENT COMPLETE"
+            f"Best Accuracy: "
+            f"{convergence['best_accuracy']:.4f}"
         )
 
         print(
-            "=" * 60
+            f"Best Accuracy Round: "
+            f"{convergence['best_accuracy_round']}"
         )
 
         print(
-            "Results directory:"
+            f"Final Loss: "
+            f"{convergence['final_loss']:.4f}"
+        )
+
+        print(
+            f"Accuracy Gain: "
+            f"{convergence['accuracy_gain']:.4f}"
+        )
+
+        print(
+            f"Loss Reduction: "
+            f"{convergence['loss_reduction']:.4f}"
+        )
+
+        print(
+            f"Experiment Duration: "
+            f"{experiment_duration:.2f}s"
+        )
+
+        print(
+            "\nResults saved to:"
         )
 
         print(
@@ -381,265 +686,93 @@ class Main:
         )
 
     # =========================================================
-    # Print metrics
+    # PRINT METRICS
     # =========================================================
 
     def print_metrics(self):
 
-        print(
-            "\n" + "=" * 60
-        )
-
-        print(
-            "FINAL EXPERIMENT ANALYTICS"
-        )
-
-        print(
-            "=" * 60
-        )
-
-        # =====================================================
-        # Global metrics
-        # =====================================================
-
-        print(
-            "\nGLOBAL METRICS"
-        )
+        print("\n========================================")
+        print("Experiment Metrics")
+        print("========================================")
 
         global_metrics = (
             self.metrics.get_global_metrics()
         )
 
-        for i in range(
-            len(global_metrics["rounds"])
-        ):
-
-            round_duration = 0.0
-
-            if i < len(
-                global_metrics["round_durations"]
-            ):
-
-                round_duration = (
-                    global_metrics[
-                        "round_durations"
-                    ][i]
-                )
-
-            print(
-
-                f"Round "
-                f"{global_metrics['rounds'][i]} | "
-
-                f"Accuracy: "
-                f"{global_metrics['accuracy'][i]:.2%} | "
-
-                f"Accuracy Change: "
-                f"{global_metrics['accuracy_change'][i]:+.2%} | "
-
-                f"Loss: "
-                f"{global_metrics['loss'][i]:.4f} | "
-
-                f"Client Mean Loss: "
-                f"{global_metrics['client_mean_loss'][i]:.4f} | "
-
-                f"Client Std: "
-                f"{global_metrics['client_loss_std'][i]:.4f} | "
-
-                f"Duration: "
-                f"{round_duration:.2f}s"
-            )
-
-        # =====================================================
-        # Convergence analysis
-        # =====================================================
-
-        convergence = (
+        convergence_metrics = (
             self.metrics.get_convergence_metrics()
         )
 
         print(
-            "\nCONVERGENCE ANALYSIS"
+            "\nGlobal Accuracy:"
         )
 
-        if convergence:
+        for round_number, accuracy in zip(
+            global_metrics["rounds"],
+            global_metrics["accuracy"]
+        ):
 
             print(
-                f"Initial Accuracy: "
-                f"{convergence['initial_accuracy']:.2%}"
+                f"Round {round_number}: "
+                f"{accuracy:.4f}"
             )
-
-            print(
-                f"Final Accuracy: "
-                f"{convergence['final_accuracy']:.2%}"
-            )
-
-            print(
-                f"Best Accuracy: "
-                f"{convergence['best_accuracy']:.2%}"
-            )
-
-            print(
-                f"Best Accuracy Round: "
-                f"{convergence['best_accuracy_round']}"
-            )
-
-            print(
-                f"Accuracy Gain: "
-                f"{convergence['accuracy_gain']:+.2%}"
-            )
-
-            print(
-                f"Initial Loss: "
-                f"{convergence['initial_loss']:.4f}"
-            )
-
-            print(
-                f"Final Loss: "
-                f"{convergence['final_loss']:.4f}"
-            )
-
-            print(
-                f"Loss Reduction: "
-                f"{convergence['loss_reduction']:.4f}"
-            )
-
-            print(
-                f"Loss Reduction %: "
-                f"{convergence['loss_reduction_percent']:.2f}%"
-            )
-
-            print(
-                f"Average Accuracy Change: "
-                f"{convergence['average_accuracy_change']:.4f}"
-            )
-
-            print(
-                f"Accuracy Volatility: "
-                f"{convergence['accuracy_volatility']:.4f}"
-            )
-
-            print(
-                f"Average Loss Change: "
-                f"{convergence['average_loss_change']:.4f}"
-            )
-
-            print(
-                f"Loss Volatility: "
-                f"{convergence['loss_volatility']:.4f}"
-            )
-
-            print(
-                f"Average Round Duration: "
-                f"{convergence['average_round_duration']:.2f}s"
-            )
-
-            print(
-                f"Minimum Round Duration: "
-                f"{convergence['min_round_duration']:.2f}s"
-            )
-
-            print(
-                f"Maximum Round Duration: "
-                f"{convergence['max_round_duration']:.2f}s"
-            )
-
-            print(
-                f"Total Experiment Duration: "
-                f"{convergence['total_experiment_duration']:.2f}s"
-            )
-
-        # =====================================================
-        # Client training losses
-        # =====================================================
 
         print(
-            "\nCLIENT TRAINING LOSSES"
+            "\nGlobal Loss:"
         )
 
-        for (
-            client_id,
-            losses
-        ) in self.metrics.get_client_metrics().items():
+        for round_number, loss in zip(
+            global_metrics["rounds"],
+            global_metrics["loss"]
+        ):
 
             print(
-                f"\nClient {client_id}:"
+                f"Round {round_number}: "
+                f"{loss:.4f}"
             )
 
-            for (
-                round_number,
-                loss
-            ) in enumerate(
-                losses,
-                start=1
-            ):
-
-                print(
-                    f"  Round "
-                    f"{round_number}: "
-                    f"{loss:.4f}"
-                )
-
-        # =====================================================
-        # Client convergence
-        # =====================================================
-
         print(
-            "\nCLIENT CONVERGENCE"
+            "\nConvergence:"
         )
 
-        client_convergence = (
-            self.metrics
-            .get_client_convergence_metrics()
-        )
-
-        for (
-            client_id,
-            data
-        ) in client_convergence.items():
+        for key, value in (
+            convergence_metrics.items()
+        ):
 
             print(
-
-                f"Client {client_id} | "
-
-                f"Initial Loss: "
-                f"{data['initial_loss']:.4f} | "
-
-                f"Final Loss: "
-                f"{data['final_loss']:.4f} | "
-
-                f"Loss Reduction: "
-                f"{data['loss_reduction']:.4f}"
+                f"{key}: {value}"
             )
 
 
 # =============================================================
-# Entry point
+# ENTRY POINT
 # =============================================================
 
-if __name__ == "__main__":
+def main():
+
+    # ---------------------------------------------------------
+    # Select experiment configuration
+    #
+    # Keep baseline.yaml for EXP01.
+    #
+    # Change this path to:
+    #
+    # config/exp02_byzantine_sign_flip.yaml
+    #
+    # when running EXP02.
+    # ---------------------------------------------------------
 
     config = load_config(
-        "config/baseline.yaml"
+        "config/exp03_byzantine_sign_flip_multiple.yaml"
     )
 
-    seed = (
-        config["experiment"]["seed"]
-    )
-
-    set_seed(seed)
-
-    app = Main(
+    experiment = Main(
         config
     )
 
-    num_clients = (
-        config["federated_learning"]
-        ["num_clients"]
-    )
+    experiment.run()
 
-    app.create_clients(
-        num_clients
-    )
 
-    app.run()
+if __name__ == "__main__":
+
+    main()
